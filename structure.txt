@@ -23,7 +23,6 @@ anime-image-classifier/
 │   │   └── model_factory.py
 │   │
 │   ├── train.py
-│   ├── tune.py                  # Optuna head tuning
 │   ├── evaluate.py
 │   └── utils.py
 |   └── fine_tuning.py
