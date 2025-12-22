@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+
+# Data (never commit)
+data/raw/
+data/processed/
+
+# Outputs
+checkpoints/
+experiments/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+.vscode
+__init__.py

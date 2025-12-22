@@ -1,0 +1,32 @@
+anime-image-classifier/
+│
+├── README.md
+├── requirements.txt
+├── .gitignore
+│
+├── data/
+│   ├── raw/                     # raw scraped images (any resolution)
+│   ├── processed/               # clean dataset (ImageFolder-ready)
+│   │   ├── train/
+│   │   ├── val/
+│   │   ├── test/
+│   │ 
+│   └── README.md
+│
+│
+├── src/
+│   ├── data/
+│   │   ├── dataloader.py
+│   │   └── transforms.py
+│   │
+│   ├── models/
+│   │   └── model_factory.py
+│   │
+│   ├── train.py
+│   ├── tune.py                  # Optuna head tuning
+│   ├── evaluate.py
+│   └── utils.py
+|   └── fine_tuning.py
+│
+├── checkpoints/                 # saved models
+│└──split-data.py                # split data into train, val, test

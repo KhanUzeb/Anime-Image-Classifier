@@ -1,0 +1,22 @@
+# -------- Core --------
+numpy==1.26.4
+tqdm==4.66.4
+pillow==10.3.0
+imagehash==4.3.1
+pandas==2.2.1
+
+# -------- PyTorch (CUDA build installed separately) --------
+torch==2.2.2
+torchvision==0.17.2
+
+# -------- Scraping --------
+bing-image-downloader==1.1.2
+
+# -------- Vision / Filtering --------
+transformers==4.41.2
+open_clip_torch==2.24.0
+
+# -------- Tuning & Metrics --------
+optuna==3.6.1
+scikit-learn==1.4.2
+matplotlib==3.8.4
