@@ -2,7 +2,7 @@
 
 A robust deep learning project that classifies over 130+ anime characters with high accuracy. This project demonstrates a complete end-to-end ML pipeline: creating a custom dataset, implementing transfer learning with ResNet34, optimizing hyperparameters with Optuna, and fine-tuning for production-ready performance.
 
-##  Model Architecture Deep Dive
+##  Model Architecture 
 
 This project utilizes **Transfer Learning** to leverage the power of pre-trained networks.
 

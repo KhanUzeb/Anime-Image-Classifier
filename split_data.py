@@ -11,10 +11,6 @@ import shutil
 import random
 from pathlib import Path
 
-# =========================
-# CONFIG
-# =========================
-
 RAW_DIR = Path("data/raw")
 OUT_DIR = Path("data/processed")
 
@@ -27,9 +23,6 @@ random.seed(SEED)
 
 IMG_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
-# =========================
-# SCRIPT
-# =========================
 
 def split_dataset():
     assert RAW_DIR.exists(), " data/raw does not exist"
@@ -87,9 +80,6 @@ def split_dataset():
     print("\n Dataset split complete.")
     print(f" Output written to: {OUT_DIR}")
 
-# =========================
-# ENTRY
-# =========================
 
 if __name__ == "__main__":
     split_dataset()

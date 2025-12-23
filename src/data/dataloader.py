@@ -7,9 +7,7 @@ from src.data.transforms import (
     get_eval_transforms,
 )
 
-# =========================
-# MAIN API
-# =========================
+
 
 def build_dataloaders(
     data_dir: str,
@@ -46,7 +44,7 @@ def build_dataloaders(
         pin_memory=True,
         persistent_workers=True,
         prefetch_factor=2,
-        drop_last=True,   # IMPORTANT for BatchNorm
+        drop_last=True, 
     )
 
     val_loader = DataLoader(

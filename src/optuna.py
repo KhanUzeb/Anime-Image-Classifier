@@ -53,7 +53,6 @@ def objective(trial):
             loss.backward()
             optimizer.step()
 
-    # ---- Validation ----
     model.eval()
     correct, total = 0, 0
     with torch.no_grad():

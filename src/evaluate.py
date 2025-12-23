@@ -29,10 +29,6 @@ CHECKPOINTS = {
 DEFAULT_PARAMS = {"hidden_dim": 256, "dropout": 0.3}
 
 
-# =========================
-# DIAGNOSTICS
-# =========================
-
 def get_uncertainty_metrics(model, loader):
     """Computes average confidence and entropy."""
     model.eval()
@@ -86,9 +82,6 @@ def get_gradient_norms(model, loader):
     return head_grad, layer4_grad
 
 
-# =========================
-# EVALUATION
-# =========================
 
 def evaluate_run(run_name, checkpoint_path, loaders, params, report_dir):
     print(f"\n{'-'*40}")
@@ -100,7 +93,7 @@ def evaluate_run(run_name, checkpoint_path, loaders, params, report_dir):
         print(f" [!] Checkpoint not found: {checkpoint_path}")
         return
 
-    # 1. Build & Load Model
+
     unfreeze_last = "finetuned" in run_name
     model = build_model(
         num_classes=loaders["num_classes"],
@@ -113,7 +106,6 @@ def evaluate_run(run_name, checkpoint_path, loaders, params, report_dir):
     model.load_state_dict(torch.load(checkpoint_path, map_location=DEVICE))
     model.eval()
 
-    # 2. Main Evaluation Loop
     y_true, y_pred = [], []
     print(" -> Generating predictions...")
     
@@ -126,7 +118,7 @@ def evaluate_run(run_name, checkpoint_path, loaders, params, report_dir):
             y_true.extend(labels.tolist())
             y_pred.extend(preds.cpu().tolist())
 
-    # 3. Report Generation
+    
     acc = accuracy_score(y_true, y_pred)
     print(f" -> Test Accuracy: {acc * 100:.2f}%")
 
@@ -135,8 +127,6 @@ def evaluate_run(run_name, checkpoint_path, loaders, params, report_dir):
         target_names=loaders["class_to_idx"].keys(), 
         output_dict=True
     )
-    
-    # Save Report
     df = pd.DataFrame(report_dict).transpose()
     df["run_name"] = run_name
     df["checkpoint"] = checkpoint_path
@@ -170,7 +160,7 @@ def main():
     set_seed(42)
     os.makedirs(args.report_dir, exist_ok=True)
 
-    # Load Params
+
     params_path = "reports/best_head_params.yaml"
     if os.path.exists(params_path):
         with open(params_path) as f:
@@ -178,11 +168,9 @@ def main():
     else:
         params = DEFAULT_PARAMS
 
-    # Load Data
     print("Loading Data...")
     loaders = build_dataloaders(args.data_dir, args.batch_size)
 
-    # Evaluate All Models
     for name, path in CHECKPOINTS.items():
         evaluate_run(name, path, loaders, params, args.report_dir)
 

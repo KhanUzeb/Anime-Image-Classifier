@@ -63,8 +63,7 @@ def fine_tune():
 
         model.eval()
         correct, total = 0, 0
-        
-        # Validation loop with tqdm
+
         val_loader = loaders["val"]
         with tqdm(val_loader, desc=f"Epoch {epoch}/{epochs} [Val]", unit="batch") as pbar:
             with torch.no_grad():
