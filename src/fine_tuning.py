@@ -1,151 +1,90 @@
-import os
+import yaml
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
 
 from src.data.dataloader import build_dataloaders
 from src.models.model import build_model
 
-# =========================
-# CONFIG
-# =========================
-
-DATA_DIR = "data/processed"
-CHECKPOINT_IN = "checkpoints/resnet34_frozen_best.pth"
-CHECKPOINT_OUT = "checkpoints/resnet34_finetuned_best2.pth"
-
-BATCH_SIZE = 32
-EPOCHS = 8                  # fine-tuning converges fast
-LR = 1e-4                   #  lower LR for backbone
-WEIGHT_DECAY = 1e-4
-
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+PARAMS_PATH = "reports/best_head_params.yaml"
+CHECKPOINT_IN = "checkpoints/resnet34_baseline_optuna.pth"
+CHECKPOINT_OUT = "checkpoints/resnet34_finetuned_optuna.pth"
 
-os.makedirs("checkpoints", exist_ok=True)
-
-torch.backends.cudnn.benchmark = True
-torch.backends.cudnn.deterministic = False
-
-
-# =========================
-# FINE-TUNE
-# =========================
 
 def fine_tune():
-    print(f"\n Fine-tuning on: {DEVICE}")
+    with open(PARAMS_PATH) as f:
+        params = yaml.safe_load(f)
 
-    # -------- Data --------
-    loaders = build_dataloaders(
-        data_dir=DATA_DIR,
-        batch_size=BATCH_SIZE,
-        num_workers=None,
-    )
-
+    loaders = build_dataloaders("data/processed", 32)
     num_classes = loaders["num_classes"]
-    print(f" Classes: {num_classes}")
 
-    # -------- Model --------
     model = build_model(
-        num_classes=num_classes,
+        num_classes,
         pretrained=False,
-        freeze_backbone_flag=True,   # freeze all first
-        unfreeze_last=True,          #  unfreeze layer4
-        hidden_dim=512,
-        dropout=0.4,
+        freeze_backbone_flag=True,
+        unfreeze_last=True,
+        head_config=params
     ).to(DEVICE)
 
-    # Load frozen-backbone weights
-    state = torch.load(CHECKPOINT_IN, map_location=DEVICE)
-    model.load_state_dict(state)
+    model.load_state_dict(torch.load(CHECKPOINT_IN))
 
-    # -------- Loss --------
-    criterion = nn.CrossEntropyLoss()
-
-    # -------- Optimizer (ONLY trainable params) --------
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    criterion = nn.CrossEntropyLoss(
+        label_smoothing=params["label_smoothing"]
+    )
 
     optimizer = AdamW(
-        trainable_params,
-        lr=LR,
-        weight_decay=WEIGHT_DECAY,
+        [p for p in model.parameters() if p.requires_grad],
+        lr=params["lr_head"] * 0.1,
+        weight_decay=1e-4
     )
 
-    scheduler = CosineAnnealingLR(
-        optimizer,
-        T_max=EPOCHS,
-    )
-
-    best_val_acc = 0.0
-
-    # =========================
-    # LOOP
-    # =========================
-
-    for epoch in range(1, EPOCHS + 1):
-        print(f"\n Fine-Tune Epoch {epoch}/{EPOCHS}")
-
-        # ---- Train ----
+    best_val = 0
+    epochs = 8
+    for epoch in range(1, epochs + 1):
         model.train()
-        correct, total = 0, 0
+        running_loss = 0.0
+        train_loader = loaders["train"]
+        
+        # Training loop with tqdm
+        with tqdm(train_loader, desc=f"Epoch {epoch}/{epochs} [Fine-tune]", unit="batch") as pbar:
+            for x, y in pbar:
+                x, y = x.to(DEVICE), y.to(DEVICE)
+                optimizer.zero_grad()
+                loss = criterion(model(x), y)
+                loss.backward()
+                optimizer.step()
+                
+                running_loss += loss.item()
+                pbar.set_postfix(loss=loss.item())
 
-        train_bar = tqdm(loaders["train"], desc="Train", leave=False)
+        avg_train_loss = running_loss / len(train_loader)
 
-        for images, labels in train_bar:
-            images = images.to(DEVICE, non_blocking=True)
-            labels = labels.to(DEVICE, non_blocking=True)
-
-            optimizer.zero_grad(set_to_none=True)
-
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-
-            preds = outputs.argmax(dim=1)
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
-
-            train_bar.set_postfix(
-                loss=f"{loss.item():.4f}",
-                acc=f"{100 * correct / total:.2f}%",
-            )
-
-        train_acc = 100 * correct / total
-        print(f" Train Acc: {train_acc:.2f}%")
-
-        # ---- Validation ----
         model.eval()
-        val_correct, val_total = 0, 0
+        correct, total = 0, 0
+        
+        # Validation loop with tqdm
+        val_loader = loaders["val"]
+        with tqdm(val_loader, desc=f"Epoch {epoch}/{epochs} [Val]", unit="batch") as pbar:
+            with torch.no_grad():
+                for x, y in pbar:
+                    x, y = x.to(DEVICE), y.to(DEVICE)
+                    preds = model(x).argmax(dim=1)
+                    correct += (preds == y).sum().item()
+                    total += y.size(0)
 
-        with torch.no_grad():
-            for images, labels in loaders["val"]:
-                images = images.to(DEVICE, non_blocking=True)
-                labels = labels.to(DEVICE, non_blocking=True)
-
-                outputs = model(images)
-                preds = outputs.argmax(dim=1)
-                val_correct += (preds == labels).sum().item()
-                val_total += labels.size(0)
-
-        val_acc = 100 * val_correct / val_total
-        print(f"Val Acc: {val_acc:.2f}%")
-        scheduler.step()
-
-        # ---- Save best ----
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        acc = correct / total
+        
+        print(f"Epoch {epoch}/{epochs} - Train Loss: {avg_train_loss:.4f} - Val Acc: {acc:.4f}")
+        
+        if acc > best_val:
+            best_val = acc
             torch.save(model.state_dict(), CHECKPOINT_OUT)
-            print(f" Saved best fine-tuned model ({best_val_acc:.2f}%)")
+            print(f"  -> Model saved! New best accuracy: {best_val:.4f}")
 
-    print("\n Fine-tuning finished.")
-    print(f" Best Val Acc: {best_val_acc:.2f}%")
+    print(f"\nBest fine-tuned acc: {best_val:.3f}")
 
-
-# =========================
-# ENTRY
-# =========================
 
 if __name__ == "__main__":
     fine_tune()

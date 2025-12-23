@@ -1,106 +1,53 @@
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision import models
 
 
-# =========================
-# CLASSIFIER HEAD
-# =========================
-
 class ClassificationHead(nn.Module):
-    """
-    Simple but strong MLP head.
-    Designed for transfer learning.
-    """
-
-    def __init__(
-        self,
-        in_features: int,
-        num_classes: int,
-        hidden_dim: int = 512,
-        dropout: float = 0.4,
-    ):
+    def __init__(self, in_features, num_classes, hidden_dim, dropout):
         super().__init__()
-
-        self.net = nn.Sequential(
-            nn.Linear(in_features, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, num_classes),
-        )
+        self.fc1 = nn.Linear(in_features, hidden_dim)
+        self.ln = nn.LayerNorm(hidden_dim)
+        self.act = nn.GELU()
+        self.drop = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(hidden_dim, num_classes)
 
     def forward(self, x):
-        return self.net(x)
+        x = self.fc1(x)
+        x = self.ln(x)
+        x = self.act(x)
+        x = self.drop(x)
+        x = F.normalize(x, dim=1)
+        return self.fc2(x)
 
-
-# =========================
-# BACKBONE UTILS
-# =========================
-
-def freeze_backbone(model: nn.Module):
-    """Freeze all backbone layers."""
-    for param in model.parameters():
-        param.requires_grad = False
-
-
-def unfreeze_last_block(model: nn.Module):
-    """
-    Unfreeze only the last ResNet block (layer4).
-    Used for controlled fine-tuning.
-    """
-    for param in model.layer4.parameters():
-        param.requires_grad = True
-
-
-# =========================
-# MODEL FACTORY
-# =========================
 
 def build_model(
-    num_classes: int,
-    pretrained: bool = True,
-    freeze_backbone_flag: bool = True,
-    unfreeze_last: bool = False,
-    hidden_dim: int = 512,
-    dropout: float = 0.4,
+    num_classes,
+    pretrained=True,
+    freeze_backbone_flag=True,
+    unfreeze_last=False,
+    head_config=None
 ):
-    """
-    Builds a ResNet34 model with a custom classification head.
+    if head_config is None:
+        head_config = {"hidden_dim": 256, "dropout": 0.3}
 
-    Args:
-        num_classes: number of output classes
-        pretrained: load ImageNet weights
-        freeze_backbone_flag: freeze full backbone (Phase 1)
-        unfreeze_last: unfreeze layer4 only (Phase 3)
-        hidden_dim: classifier hidden size
-        dropout: dropout in head
-
-    Returns:
-        nn.Module
-    """
-
-    # -------- Load backbone --------
     model = models.resnet34(
         weights=models.ResNet34_Weights.IMAGENET1K_V1 if pretrained else None
     )
 
-    # -------- Freeze backbone --------
     if freeze_backbone_flag:
-        freeze_backbone(model)
+        for p in model.parameters():
+            p.requires_grad = False
 
-    # -------- Get feature size --------
-    in_features = model.fc.in_features
-
-    # -------- Replace head --------
-    model.fc = ClassificationHead(  # type: ignore
-        in_features=in_features,
-        num_classes=num_classes,
-        hidden_dim=hidden_dim,
-        dropout=dropout,
+    model.fc = ClassificationHead( # type: ignore
+        model.fc.in_features,
+        num_classes,
+        head_config["hidden_dim"],
+        head_config["dropout"],
     )
 
-    # -------- Partial unfreeze --------
     if unfreeze_last:
-        unfreeze_last_block(model)
+        for p in model.layer4.parameters():
+            p.requires_grad = True
 
     return model

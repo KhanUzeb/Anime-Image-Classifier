@@ -1,32 +1,34 @@
-anime-image-classifier/
+Anime-Image-Classifier/
 │
-├── README.md
-├── requirements.txt
-├── .gitignore
+├── README.md                      # Project documentation
+├── requirements.txt               # Python dependencies
+├── .gitignore                     # Git ignore rules
+├── split_data.py                  # Script to split raw data into train/val/test
+├── structure.txt                  # Project file structure (this file)
 │
 ├── data/
-│   ├── raw/                     # raw scraped images (any resolution)
-│   ├── processed/               # clean dataset (ImageFolder-ready)
+│   ├── raw/                       # Scraped images (e.g. data/raw/naruto/1.jpg)
+│   ├── processed/                 # Clean, split dataset ready for loading
 │   │   ├── train/
 │   │   ├── val/
-│   │   ├── test/
-│   │ 
-│   └── README.md
-│
+│   │   └── test/
+│   └── README.md                  # Data collection/cleaning notes
 │
 ├── src/
 │   ├── data/
-│   │   ├── dataloader.py
-│   │   └── transforms.py
+│   │   ├── __init__.py
+│   │   ├── dataloader.py          # Custom Dataset and DataLoader logic
+│   │   └── transforms.py          # Augmentations and preprocessing
 │   │
 │   ├── models/
-│   │   └── model_factory.py
+│   │   ├── __init__.py
+│   │   └── model.py               # ResNet34 with custom ClassificationHead
 │   │
-│   ├── train.py
-│   ├── tune.py                  # Optuna head tuning
-│   ├── evaluate.py
-│   └── utils.py
-|   └── fine_tuning.py
+│   ├── train.py                   # Train the classification head (Linear Probing)
+│   ├── fine_tuning.py             # Finetune the entire model (Stage 2)
+│   ├── optuna.py                  # Hyperparameter optimization
+│   ├── evaluate.py                # Generate classification reports
+│   └── utils.py                   # Helper functions (logging, metrics)
 │
-├── checkpoints/                 # saved models
-│└──split-data.py                # split data into train, val, test
+├── checkpoints/                   # Saved model weights (.pth)
+└── reports/                       # CSV reports comparing runs

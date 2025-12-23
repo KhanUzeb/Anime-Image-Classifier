@@ -1,22 +1,24 @@
-# -------- Core --------
+# Core
 numpy==1.26.4
-tqdm==4.66.4
-pillow==10.3.0
-imagehash==4.3.1
 pandas==2.2.1
+tqdm==4.66.4
+Pillow==10.3.0
+imagehash==4.3.1
 
-# -------- PyTorch (CUDA build installed separately) --------
+# Deep Learning (PyTorch)
 torch==2.2.2
 torchvision==0.17.2
 
-# -------- Scraping --------
-bing-image-downloader==1.1.2
+# Model Analysis & Visualization
+generated-analytics==0.1.0  # If you used any
+matplotlib==3.8.4
+scikit-learn==1.4.2
+seaborn==0.13.2
 
-# -------- Vision / Filtering --------
+# Hyperparameter Tuning
+optuna==3.6.1
+
+# Data Collection / Utils
+bing-image-downloader==1.1.2
 transformers==4.41.2
 open_clip_torch==2.24.0
-
-# -------- Tuning & Metrics --------
-optuna==3.6.1
-scikit-learn==1.4.2
-matplotlib==3.8.4

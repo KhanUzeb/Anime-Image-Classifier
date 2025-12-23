@@ -1,101 +1,193 @@
 import os
+import sys
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import yaml
 import torch
+import argparse
 import pandas as pd
+import torch.nn.functional as F
+from tqdm import tqdm
 from sklearn.metrics import classification_report, accuracy_score
 
 from src.data.dataloader import build_dataloaders
 from src.models.model import build_model
+from src.utils import set_seed
 
 # =========================
 # CONFIG
 # =========================
 
-DATA_DIR = "data/processed"
-BATCH_SIZE = 32
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# CHANGE THIS PER RUN
-#CHECKPOINT_PATH = "checkpoints/resnet34_frozen_best.pth"
-CHECKPOINT_PATH = "checkpoints/resnet34_finetuned_best2.pth"
-RUN_NAME = "finetuned_layer4"   # change to "finetuned_layer4"
+CHECKPOINTS = {
+    "baseline": "checkpoints/resnet34_baseline_optuna.pth",
+    "finetuned": "checkpoints/resnet34_finetuned_optuna.pth",
+}
 
-
-REPORT_DIR = "reports"
-os.makedirs(REPORT_DIR, exist_ok=True)
+DEFAULT_PARAMS = {"hidden_dim": 256, "dropout": 0.3}
 
 
 # =========================
-# EVALUATE
+# DIAGNOSTICS
 # =========================
 
-def evaluate():
-    print(f"\n Evaluating: {RUN_NAME}")
-    print(f" Checkpoint: {CHECKPOINT_PATH}")
+def get_uncertainty_metrics(model, loader):
+    """Computes average confidence and entropy."""
+    model.eval()
+    confidences = []
+    entropies = []
 
-    # -------- Data --------
-    loaders = build_dataloaders(
-        data_dir=DATA_DIR,
-        batch_size=BATCH_SIZE,
-        num_workers=None,
+    with torch.no_grad():
+        for images, _ in loader:
+            images = images.to(DEVICE)
+            probs = F.softmax(model(images), dim=1)
+
+            confidences.extend(probs.max(dim=1).values.cpu().tolist())
+            
+            # Entropy: -sum(p * log(p))
+            batch_entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=1)
+            entropies.extend(batch_entropy.cpu().tolist())
+
+    return (
+        sum(confidences) / len(confidences),
+        sum(entropies) / len(entropies)
     )
 
-    test_loader = loaders["test"]
-    class_names = list(loaders["class_to_idx"].keys())
-    num_classes = loaders["num_classes"]
 
-    # -------- Model --------
+def get_gradient_norms(model, loader):
+    """
+    Computes gradient norms for Head vs Last Layer.
+    Useful to see which part of the model is learning during fine-tuning.
+    """
+    model.train()
+    model.zero_grad()
+    
+    images, labels = next(iter(loader))
+    images, labels = images.to(DEVICE), labels.to(DEVICE)
+
+    loss = F.cross_entropy(model(images), labels)
+    loss.backward()
+
+    head_grad = 0.0
+    layer4_grad = 0.0
+
+    for name, p in model.named_parameters():
+        if p.grad is None:
+            continue
+        norm = p.grad.norm().item()
+        if "fc" in name:
+            head_grad += norm
+        if "layer4" in name:
+            layer4_grad += norm
+
+    model.eval()
+    return head_grad, layer4_grad
+
+
+# =========================
+# EVALUATION
+# =========================
+
+def evaluate_run(run_name, checkpoint_path, loaders, params, report_dir):
+    print(f"\n{'-'*40}")
+    print(f" EVALUATING: {run_name.upper()}")
+    print(f" Cloned from: {checkpoint_path}")
+    print(f"{'-'*40}")
+
+    if not os.path.exists(checkpoint_path):
+        print(f" [!] Checkpoint not found: {checkpoint_path}")
+        return
+
+    # 1. Build & Load Model
+    unfreeze_last = "finetuned" in run_name
     model = build_model(
-        num_classes=num_classes,
+        num_classes=loaders["num_classes"],
         pretrained=False,
         freeze_backbone_flag=True,
-        unfreeze_last=False,  # irrelevant for eval
+        unfreeze_last=unfreeze_last,
+        head_config=params
     ).to(DEVICE)
 
-    model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
+    model.load_state_dict(torch.load(checkpoint_path, map_location=DEVICE))
     model.eval()
 
+    # 2. Main Evaluation Loop
     y_true, y_pred = [], []
-
-    # -------- Inference --------
+    print(" -> Generating predictions...")
+    
     with torch.no_grad():
-        for images, labels in test_loader:
-            images = images.to(DEVICE, non_blocking=True)
-            labels = labels.to(DEVICE, non_blocking=True)
-
+        for images, labels in tqdm(loaders["test"], desc="Test Set"):
+            images = images.to(DEVICE)
             outputs = model(images)
             preds = outputs.argmax(dim=1)
 
-            y_true.extend(labels.cpu().tolist())
+            y_true.extend(labels.tolist())
             y_pred.extend(preds.cpu().tolist())
 
-    # -------- Metrics --------
+    # 3. Report Generation
     acc = accuracy_score(y_true, y_pred)
-    print(f"✅ Test Accuracy: {acc * 100:.2f}%")
+    print(f" -> Test Accuracy: {acc * 100:.2f}%")
 
-    report = classification_report(
-        y_true,
-        y_pred,
-        target_names=class_names,
-        output_dict=True,
-        digits=4,
+    report_dict = classification_report(
+        y_true, y_pred, 
+        target_names=loaders["class_to_idx"].keys(), 
+        output_dict=True
     )
+    
+    # Save Report
+    df = pd.DataFrame(report_dict).transpose()
+    df["run_name"] = run_name
+    df["checkpoint"] = checkpoint_path
+    
+    out_file = os.path.join(report_dir, f"{run_name}_report.csv")
+    df.to_csv(out_file)
+    print(f" -> Report saved to: {out_file}")
 
-    df = pd.DataFrame(report).transpose()
+    # 4. Run Diagnostics
+    print(" -> Running Diagnostics...")
+    val_conf, val_ent = get_uncertainty_metrics(model, loaders["val"])
+    test_conf, test_ent = get_uncertainty_metrics(model, loaders["test"])
 
-    # Add run metadata
-    df["run_name"] = RUN_NAME
-    df["checkpoint"] = CHECKPOINT_PATH
+    print(f"    [Val]  Confidence: {val_conf:.3f} | Entropy: {val_ent:.3f}")
+    print(f"    [Test] Confidence: {test_conf:.3f} | Entropy: {test_ent:.3f}")
 
-    # -------- Save --------
-    out_path = os.path.join(REPORT_DIR, f"{RUN_NAME}_report.csv")
-    df.to_csv(out_path)
+    if unfreeze_last:
+        hg, lg = get_gradient_norms(model, loaders["train"])
+        print(f"    [Grads] Head: {hg:.4f} | Layer4: {lg:.4f}")
+        dominance = "Backbone" if lg > hg else "Head"
+        print(f"    [Info] {dominance} gradients check dominant.")
 
-    print(f"📄 Report saved to: {out_path}")
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_dir", default="data/processed")
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--report_dir", default="reports")
+    args = parser.parse_args()
 
-# =========================
-# ENTRY
-# =========================
+    set_seed(42)
+    os.makedirs(args.report_dir, exist_ok=True)
+
+    # Load Params
+    params_path = "reports/best_head_params.yaml"
+    if os.path.exists(params_path):
+        with open(params_path) as f:
+            params = yaml.safe_load(f)
+    else:
+        params = DEFAULT_PARAMS
+
+    # Load Data
+    print("Loading Data...")
+    loaders = build_dataloaders(args.data_dir, args.batch_size)
+
+    # Evaluate All Models
+    for name, path in CHECKPOINTS.items():
+        evaluate_run(name, path, loaders, params, args.report_dir)
+
+    print("\n[Done] All evaluations complete.")
+
 
 if __name__ == "__main__":
-    evaluate()
+    main()
