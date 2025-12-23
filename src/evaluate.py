@@ -15,10 +15,6 @@ from src.data.dataloader import build_dataloaders
 from src.models.model import build_model
 from src.utils import set_seed
 
-# =========================
-# CONFIG
-# =========================
-
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 CHECKPOINTS = {
@@ -135,7 +131,6 @@ def evaluate_run(run_name, checkpoint_path, loaders, params, report_dir):
     df.to_csv(out_file)
     print(f" -> Report saved to: {out_file}")
 
-    # 4. Run Diagnostics
     print(" -> Running Diagnostics...")
     val_conf, val_ent = get_uncertainty_metrics(model, loaders["val"])
     test_conf, test_ent = get_uncertainty_metrics(model, loaders["test"])
