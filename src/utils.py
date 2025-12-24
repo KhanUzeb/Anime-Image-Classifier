@@ -4,20 +4,12 @@ import numpy as np
 import torch
 
 
-# =========================
-# REPRODUCIBILITY
-# =========================
-
 def set_seed(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-
-# =========================
-# METRICS
-# =========================
 
 def accuracy_from_logits(logits, labels):
     """
@@ -29,10 +21,6 @@ def accuracy_from_logits(logits, labels):
     return correct / total
 
 
-# =========================
-# CHECKPOINTING
-# =========================
-
 def save_checkpoint(model, path: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save(model.state_dict(), path)
@@ -43,10 +31,6 @@ def load_checkpoint(model, path: str, device="cpu"):
     model.load_state_dict(state)
     return model
 
-
-# =========================
-# PARAM COUNT (DEBUG / LOG)
-# =========================
 
 def count_trainable_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
