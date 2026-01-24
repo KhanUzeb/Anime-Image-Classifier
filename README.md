@@ -76,23 +76,36 @@ pip install -r requirements.txt
 
 ### 3. Data Setup
 
-First, prepare the project directories:
+1.  **Create Directories**:
 
-```bash
-mkdir -p data/raw data/processed checkpoints
-```
+    ```bash
+    mkdir -p data/raw
+    ```
 
-Next, place your raw image folders in `data/raw/` (e.g., `data/raw/naruto/`, `data/raw/sasuke/`).
+2.  **Acquire Data**:
+    - **Option A (Kaggle)**: Download the [Anime Face Dataset](https://www.kaggle.com/datasets/thedevastator/anime-face-dataset-by-character-name) and unzip it into `data/raw/`.
+    - **Option B (Custom)**: Place your own images in `data/raw/` in the format: `data/raw/<character_name>/*.jpg`.
 
-Then run the processing script:
+3.  **Process Data**:
+    Run the split script to prepare the dataset:
+    ```bash
+    python split_data.py
+    ```
 
-```bash
-python split_data.py
-```
-
-This will generate the `data/processed/` folder.
+    Run the transform script to prepare the dataset:
+    ```bash
+    python src/data/dataloader.py
+    ```
+    This generates the `data/processed/` directory with train/val/test splits.
 
 ### 4. Training
+
+**0. Verify Data Pipeline (Optional)**
+Check that your images are loading correctly with the applied transforms:
+
+```bash
+python src/data/dataloader.py
+```
 
 **Option A: Tune & Train (Recommended)**
 Run Optuna to find the best hyperparameters and automatically train the model.
