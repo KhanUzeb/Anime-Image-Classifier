@@ -4,13 +4,13 @@ pandas==2.2.1
 tqdm==4.66.4
 Pillow==10.3.0
 imagehash==4.3.1
+PyYAML==6.0.1
 
 # Deep Learning (PyTorch)
 torch==2.2.2
 torchvision==0.17.2
 
 # Model Analysis & Visualization
-generated-analytics==0.1.0  # If you used any
 matplotlib==3.8.4
 scikit-learn==1.4.2
 seaborn==0.13.2
