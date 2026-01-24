@@ -94,7 +94,7 @@ pip install -r requirements.txt
 
     Run the transform script to prepare the dataset:
     ```bash
-    python src/data/dataloader.py
+    python src/data/transforms.py
     ```
     This generates the `data/processed/` directory with train/val/test splits.
 
